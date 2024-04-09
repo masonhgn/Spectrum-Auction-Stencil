@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Get ready to dive into our first real auction challenge: The Spectrum Auction (LSVM18)! This final project is your chance to put everything we've learned into practice, especially the cool strategies from the last few labs. It's going to be remote and a lot more free-form than what we're used to, so there's plenty of room to experiment and find what works best for your agent. I hope you all have fun!
+The Spectrum Auction (LSVM18): This final project is your chance to put everything we've learned into practice, especially the cool strategies from the last few labs. It's going to be remote and a lot more free-form than what we're used to, so there's plenty of room to experiment and find what works best for your agent. I hope you all have fun!
 
 ## Setup and Installation
 
