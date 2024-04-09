@@ -13,7 +13,7 @@ Follow these steps to set up your environment and install the necessary package 
 Open your terminal and navigate to where you want to clone the repository
 
 ```bash
-git clone https://github.com/brown-agt/spectrum_auction_stencil.git
+git clone https://github.com/brown-agt/Spectrum-Auction-Stencil.git
 ```
 
 ### Step 2: Create a Virtual Environment
