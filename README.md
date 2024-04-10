@@ -67,6 +67,15 @@ For the `LSVM Agent`s here are a few methods that you may find helpful!
 
 - **`get_tentative_allocation()`**:
   - Returns a set of strings representing goods tentatively allocated to this agent, showing the current potential gains from the auction.
+  
+- **`get_current_round()`**:
+  - Provides the current round number in the auction, allowing the agent to adjust strategies over time.
+
+- **`get_goods_in_proximity()`**:
+  - Lists names of goods within the agent's regional proximity or all goods if a national bidder, guiding regional bidding strategies.
+
+- **`proximity(arr, regional_good)`**:
+  - Filters goods based on their proximity to a specified regional good, relevant for regional bidders to evaluate their interest in nearby goods.
 
 #### Utility Calculation Methods
 
@@ -78,17 +87,6 @@ For the `LSVM Agent`s here are a few methods that you may find helpful!
 
 - **`calc_total_utility(bundle)`**:
   - Calculates the total utility of a given bundle of goods for the agent
-
-#### Auction Round Methods
-
-- **`get_current_round()`**:
-  - Provides the current round number in the auction, allowing the agent to adjust strategies over time.
-
-- **`get_goods_in_proximity()`**:
-  - Lists names of goods within the agent's regional proximity or all goods if a national bidder, guiding regional bidding strategies.
-
-- **`proximity(arr, regional_good)`**:
-  - Filters goods based on their proximity to a specified regional good, relevant for regional bidders to evaluate their interest in nearby goods.
 
 #### Valuation and Bidding Methods
 
@@ -123,10 +121,10 @@ Detailed history methods allow the agent to analyze its performance and adjust s
 - **`get_price_history()`** and **`get_price_history_map()`**: Gives a record of the prices over the course of the auction.
 - **`get_winner_history()`** and **`get_winner_history_map()`**: Details the history of who won what bids in previous rounds, helping the agent to adjust its future bids based on past success rates.
 
-- **`get_last_util()`**: Provides the most recent utility value for the agent.
-- **`get_last_bid_history()`** and **`get_last_bid_history_map()`**: Provides the most recent bids the agent has made, either as numpy arrays or mappings.
-- **`get_last_price_history()`** and **`get_last_price_history_map()`**: Provides the most recent prices in the auction.
-- **`get_last_winner_history()`** and **`get_last_winner_history_map()`**: Provides the most recent history of who won what bids in the last round.
+- **`get_previous_util()`**: Provides the most recent utility value for the agent.
+- **`get_previous_bid_history()`** and **`get_previous_bid_history_map()`**: Provides the most recent bids the agent has made, either as numpy arrays or mappings.
+- **`get_current_prices()`** and **`get_current_prices_map()`**: Provides the most recent prices in the auction.
+- **`get_previous_winner_history()`** and **`get_previous_winner_history_map()`**: Provides the most recent history of who won what bids in the last round.
 
 ## Notes about the python code
 
