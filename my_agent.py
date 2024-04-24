@@ -44,6 +44,10 @@ class MyAgent(MyLSVMAgent):
         #TODO: Fill out with anything you want to update each round
         pass 
 
+    def teardown(self):
+        #TODO: Fill out with anything you want to run at the end of each auction
+        pass 
+
 ################### SUBMISSION #####################
 my_agent_submission = MyAgent(NAME)
 ####################################################
