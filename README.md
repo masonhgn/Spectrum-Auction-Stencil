@@ -128,7 +128,6 @@ Detailed history methods allow the agent to analyze its performance and adjust s
 
 ## Notes about the python code
 
-- Please Please Please refer to the final project handout and read through it carefully! It contains a lot of information specific to this implementation of the spectrum auction and making sure your code works for submission.
+- Please refer to the final project handout and read through it carefully! It contains a lot of information specific to this implementation of the spectrum auction and making sure your code works for submission.
 - In class, I mentioned that you need to do relative imports but that is outdated news, the autograder should automatically handle that for you now so as long as you don't name your files random.py or numpy.py or [Insert Common Package Name].py, the submission should work.
 - Please let us know if you want to import any new packages not natively provided in agt_server and we will install it on our end after checking it so that the code can import it in the final submission. [E.g. last time we needed to actually install tensorflow for the tensorflow code to run correctly]
-- Please use a version of python greater than or equal to 3.10 when creating your venv in order for ELO calculations to be correct!  
