@@ -11,28 +11,110 @@ import json
 from path_utils import path_from_local_root
 
 
-NAME = # TODO: Please give your agent a NAME
+NAME = 'TEST'
 
 class MyAgent(MyLSVMAgent):
     def setup(self):
         #TODO: Fill out with anything you want to initialize each auction
         pass 
-    
-    def national_bidder_strategy(self): 
-        # TODO: Fill out with your national bidder strategy
-        min_bids = self.get_min_bids()
-        valuations = self.get_valuations() 
-        bids = {} 
-        ...
-        return bids
 
-    def regional_bidder_strategy(self): 
-        # TODO: Fill out with your regional bidder strategy
+
+
+
+    
+    def national_bidder_strategy(self, num_trials=100, max_bundle_size=10):
+        goods = list(self.get_goods())
         min_bids = self.get_min_bids()
-        valuations = self.get_valuations() 
-        bids = {} 
-        ...
-        return bids
+        valuations = self.get_valuations()
+
+        best_bundle = set()
+        best_utility = float('-inf')
+        best_bids = {}
+
+        for _ in range(num_trials):
+            seed = random.choice(goods)
+            bundle = {seed}
+            frontier = [seed]
+
+            while frontier and len(bundle) < max_bundle_size:
+                current = frontier.pop()
+                neighbors = self.get_neighbors(current)
+                random.shuffle(neighbors)
+                for n in neighbors:
+                    if n not in bundle and random.random() < 0.5:
+                        bundle.add(n)
+                        frontier.append(n)
+
+            my_bids = {g: min_bids[g] + 0.1 for g in bundle}
+            if self.is_valid_bid_bundle(my_bids):
+                value = sum(valuations[g] for g in bundle)
+
+                cost = sum(my_bids[g] for g in bundle)
+                utility = value - cost  
+                if utility > best_utility:
+                    best_bundle = bundle
+                    best_utility = utility
+                    best_bids = {g: max(min_bids[g] + 0.01, min(valuations[g], min_bids[g] + 0.5)) for g in bundle}
+
+        return best_bids
+
+
+
+
+
+
+    def get_neighbors(self, good):
+        i, j = self.get_goods_to_index()[good]
+        neighbors = []
+        for di, dj in [(-1,0), (1,0), (0,-1), (0,1)]:
+            ni, nj = i+di, j+dj
+            if 0 <= ni < 3 and 0 <= nj < 6:
+                for g, (gi, gj) in self.get_goods_to_index().items():
+                    if (gi, gj) == (ni, nj):
+                        neighbors.append(g)
+        return neighbors
+
+
+
+
+    def regional_bidder_strategy(self, num_trials=100, max_bundle_size=6):
+        proximity = self.get_goods_in_proximity()
+        min_bids = self.get_min_bids()
+        valuations = self.get_valuations()
+
+        best_bundle = set()
+        best_utility = float('-inf')
+        best_bids = {}
+
+        for _ in range(num_trials):
+            seed = random.choice(list(proximity))
+            bundle = {seed}
+            frontier = [seed]
+
+            while frontier and len(bundle) < max_bundle_size:
+                current = frontier.pop()
+                neighbors = self.get_neighbors(current)
+                random.shuffle(neighbors)
+                for n in neighbors:
+                    if n in proximity and n not in bundle and random.random() < 0.5:
+                        bundle.add(n)
+                        frontier.append(n)
+
+            my_bids = {g: min_bids[g] + 0.1 for g in bundle}
+            if self.is_valid_bid_bundle(my_bids):
+                value = sum(valuations[g] for g in bundle)
+
+                cost = sum(my_bids[g] for g in bundle)
+                utility = value - cost  
+                
+                if utility > best_utility:
+                    best_bundle = bundle
+                    best_utility = utility
+                    best_bids = {g: max(min_bids[g] + 0.01, min(valuations[g], min_bids[g] + 0.5)) for g in bundle}
+
+        return best_bids
+
+
 
     def get_bids(self):
         if self.is_national_bidder(): 
