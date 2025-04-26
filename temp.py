@@ -9,72 +9,62 @@ import random
 import gzip
 import json
 from path_utils import path_from_local_root
-from collections import deque
-import math
+
 
 NAME = 'CJM'
 
 class MyAgent(MyLSVMAgent):
     def setup(self):
-        self.goods = list(self.get_goods()) #get all good s 
-        self.prox_goods = set(self.get_goods_in_proximity())
-        self.eps = 0.1 # auction increment
-        self.slack = 2.0 # max jump above min-bid
+        #TODO: Fill out with anything you want to initialize each auction
+        pass 
 
-        #optimal chunk size parameters, should we change?
-        self.target_size_nat = 6 
-        self.target_size_reg = 5 
-
-        # dynamic tracking
-        self.price_hist = deque(maxlen=6)
-
-
-    def _delta_values(self, tentative):
-        base_val = self.calc_total_valuation(tentative)
-        deltas = {}
-        for g in self.goods:
-            if g in tentative:
-                continue
-            deltas[g] = self.calc_total_valuation(tentative | {g}) - base_val
-        return deltas 
-
-
-    def _price_trend(self, g, horizon=4):
-        if len(self.price_hist) < 2:
-            return 0.0
-
-        recent = list(self.price_hist)[-horizon:]
-        series = [p[g] for p in recent if g in p] # handles first round
-        if len(series) < 2: # not enough data yet
-            return 0.0
-        diffs  = [series[i] - series[i-1] for i in range(1, len(series))]
-        return sum(diffs) / len(diffs)
-
-    def _jump_bid(self, g, delta, min_bid):
-        jump = min(delta / 2.0, self.slack) #soft aggression
-        return min_bid + max(self.eps, jump)   
 
 
     #national
     
-    def national_bidder_strategy(self):
-        tentative = set(self.get_tentative_allocation())
-        target = self.target_size_nat - len(tentative)
-        deltas = self._delta_values(tentative)
+    def national_bidder_strategy(self, num_trials=100, max_bundle_size=10):
+        goods = list(self.get_goods())
+        min_bids = self.get_min_bids()
+        valuations = self.get_valuations()
 
-        # pick top-delta goods anywhere on the board
-        cand = [g for g in self.goods if g in deltas and deltas[g] > 0]
-        cand.sort(key=lambda g: deltas[g], reverse=True)
-        bids = {}
+        best_bundle = set()
+        best_utility = float('-inf')
+        best_bids = {}
 
-        for g in cand[:max(0, target)]:
-            trend = self._price_trend(g)
-            if trend > deltas[g] / 4: #national bundles tolerate more risk
-                continue
-            min_bid = self.get_min_bids({g})[g]
-            bids[g] = self._jump_bid(g, deltas[g], min_bid)
+        for r in range(num_trials):
 
-        return bids
+
+            seed = random.choice(goods) #init random seed
+            bundle = {seed}
+            newice = [seed]
+
+            while newice and len(bundle) < max_bundle_size:
+                current = newice.pop()
+
+
+
+                neighbors = self.get_neighbors(current)
+                random.shuffle(neighbors)
+                for n in neighbors:
+                    if n not in bundle and random.random() < 0.5:
+                        bundle.add(n)
+                        newice.append(n)
+
+
+
+
+            my_bids = {g: min_bids[g] + 0.1 for g in bundle}
+            if self.is_valid_bid_bundle(my_bids):
+                value = sum(valuations[g] for g in bundle)
+
+                cost = sum(my_bids[g] for g in bundle)
+                utility = value - cost  
+                if utility > best_utility:
+                    best_bundle = bundle
+                    best_utility = utility
+                    best_bids = {g: max(min_bids[g] + 0.01, min(valuations[g], min_bids[g] + 0.5)) for g in bundle}
+
+        return best_bids
 
 
 
@@ -86,7 +76,7 @@ class MyAgent(MyLSVMAgent):
         neighbors = []
         for di, dj in [(-1,0), (1,0), (0,-1), (0,1)]:
             ni, nj = i+di, j+dj
-            if 0 <= ni < 3 and 0 <= nj < 6: #if valid row, col
+            if 0 <= ni < 3 and 0 <= nj < 6: #if 
                 for g, (gi, gj) in self.get_goods_to_index().items():
 
 
@@ -98,49 +88,57 @@ class MyAgent(MyLSVMAgent):
 
     #regional
 
-    def regional_bidder_strategy(self):
-        tentative = set(self.get_tentative_allocation())
-        target = self.target_size_reg - len(tentative)
-        deltas = self._delta_values(tentative)
+    def regional_bidder_strategy(self, num_trials=300, max_bundle_size=7):
 
-        # consider only proximity goods until target met
-        cand = [g for g in self.prox_goods if g in deltas and deltas[g] > 0]
-        cand.sort(key=lambda g: deltas[g], reverse=True)
-        bids = {}
+        proximity = self.get_goods_in_proximity()
 
-        for g in cand[:max(0, target)]:
-            trend = self._price_trend(g)
-            # if price is climbing faster than remaining delta, skip
-            if trend > deltas[g] / 3:
-                continue
-            min_bid = self.get_min_bids({g})[g]
-            bids[g] = self._jump_bid(g, deltas[g], min_bid)
+        min_bids = self.get_min_bids()
 
-        return bids
+        valuations = self.get_valuations()
+
+        best_bundle = set()
+        best_utility = float('-inf') #set min 
+        best_bids = {}
+
+        for r in range(num_trials):
+            seed = random.choice(list(proximity))
+            bundle = {seed}
+            newice = [seed]
+
+            while newice and len(bundle) < max_bundle_size:
+                current = newice.pop()
+                neighbors = self.get_neighbors(current)
+                random.shuffle(neighbors)
+                for n in neighbors:
+                    if n in proximity and n not in bundle and random.random() < 0.5:
+                        bundle.add(n)
+                        newice.append(n)
+
+            my_bids = {g: min_bids[g] + 0.1 for g in bundle}
+            if self.is_valid_bid_bundle(my_bids):
+                value = sum(valuations[g] for g in bundle)
+
+                cost = sum(my_bids[g] for g in bundle)
+                utility = value - cost  
+                
+                if utility > best_utility:
+                    best_bundle = bundle
+                    best_utility = utility
+                    best_bids = {g: max(min_bids[g] + 0.01, min(valuations[g], min_bids[g] + 0.5)) for g in bundle}
+
+        return best_bids
 
 
 
     def get_bids(self):
-        bids = (self.national_bidder_strategy() if self.is_national_bidder()
-                else self.regional_bidder_strategy())
-
-
-        if not bids:
-            g = min(self.goods, key=lambda x: self.get_min_bids({x})[x])
-            bids = {g: self.get_min_bids({g})[g]}
-
-        #final safety net
-        bids = self.clip_bids(bids)
-        assert self.is_valid_bid_bundle(bids)
-        return bids
+        if self.is_national_bidder(): 
+            return self.national_bidder_strategy()
+        else: 
+            return self.regional_bidder_strategy()
     
     def update(self):
-        try:
-            prices = self.current_prices_map()
-        except AttributeError:
-            prices = self.ndarray_to_map(self.get_current_prices())
-
-        self.price_hist.append(prices)
+        #TODO: Fill out with anything you want to update each round
+        pass 
 
     def teardown(self):
         #TODO: Fill out with anything you want to run at the end of each auction
