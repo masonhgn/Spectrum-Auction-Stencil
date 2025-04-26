@@ -11,7 +11,7 @@ import json
 from path_utils import path_from_local_root
 
 
-NAME = 'TEST'
+NAME = 'CJM'
 
 class MyAgent(MyLSVMAgent):
     def setup(self):
@@ -20,7 +20,7 @@ class MyAgent(MyLSVMAgent):
 
 
 
-
+    #national
     
     def national_bidder_strategy(self, num_trials=100, max_bundle_size=10):
         goods = list(self.get_goods())
@@ -31,19 +31,27 @@ class MyAgent(MyLSVMAgent):
         best_utility = float('-inf')
         best_bids = {}
 
-        for _ in range(num_trials):
-            seed = random.choice(goods)
-            bundle = {seed}
-            frontier = [seed]
+        for r in range(num_trials):
 
-            while frontier and len(bundle) < max_bundle_size:
-                current = frontier.pop()
+
+            seed = random.choice(goods) #init random seed
+            bundle = {seed}
+            newice = [seed]
+
+            while newice and len(bundle) < max_bundle_size:
+                current = newice.pop()
+
+
+
                 neighbors = self.get_neighbors(current)
                 random.shuffle(neighbors)
                 for n in neighbors:
                     if n not in bundle and random.random() < 0.5:
                         bundle.add(n)
-                        frontier.append(n)
+                        newice.append(n)
+
+
+
 
             my_bids = {g: min_bids[g] + 0.1 for g in bundle}
             if self.is_valid_bid_bundle(my_bids):
@@ -62,43 +70,49 @@ class MyAgent(MyLSVMAgent):
 
 
 
-
+    #get all valid neighbors in proximity. like if you're at an edge it should return fewer neighbors
     def get_neighbors(self, good):
         i, j = self.get_goods_to_index()[good]
         neighbors = []
         for di, dj in [(-1,0), (1,0), (0,-1), (0,1)]:
             ni, nj = i+di, j+dj
-            if 0 <= ni < 3 and 0 <= nj < 6:
+            if 0 <= ni < 3 and 0 <= nj < 6: #if valid row, col
                 for g, (gi, gj) in self.get_goods_to_index().items():
+
+
                     if (gi, gj) == (ni, nj):
+
                         neighbors.append(g)
         return neighbors
 
 
+    #regional
 
+    def regional_bidder_strategy(self, num_trials=300, max_bundle_size=7):
 
-    def regional_bidder_strategy(self, num_trials=100, max_bundle_size=6):
         proximity = self.get_goods_in_proximity()
+
         min_bids = self.get_min_bids()
+
         valuations = self.get_valuations()
 
         best_bundle = set()
-        best_utility = float('-inf')
+        best_utility = float('-inf') #set min 
         best_bids = {}
 
-        for _ in range(num_trials):
+        for r in range(num_trials):
             seed = random.choice(list(proximity))
             bundle = {seed}
-            frontier = [seed]
+            newice = [seed]
 
-            while frontier and len(bundle) < max_bundle_size:
-                current = frontier.pop()
+            while newice and len(bundle) < max_bundle_size:
+                current = newice.pop()
                 neighbors = self.get_neighbors(current)
                 random.shuffle(neighbors)
                 for n in neighbors:
                     if n in proximity and n not in bundle and random.random() < 0.5:
                         bundle.add(n)
-                        frontier.append(n)
+                        newice.append(n)
 
             my_bids = {g: min_bids[g] + 0.1 for g in bundle}
             if self.is_valid_bid_bundle(my_bids):
