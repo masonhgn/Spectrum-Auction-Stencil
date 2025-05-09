@@ -1,234 +1,163 @@
+# smart_bidder.py
 from agt_server.agents.base_agents.lsvm_agent import MyLSVMAgent
 from agt_server.local_games.lsvm_arena import LSVMArena
 from agt_server.agents.test_agents.lsvm.min_bidder.my_agent import MinBidAgent
 from agt_server.agents.test_agents.lsvm.jump_bidder.jump_bidder import JumpBidder
 from agt_server.agents.test_agents.lsvm.truthful_bidder.my_agent import TruthfulBidder
-import time
-import os
-import random
-import gzip
-import json
-from path_utils import path_from_local_root
-from collections import deque
-import math
 
-NAME = 'CJM'
+import numpy as np, heapq, time
+
+NAME = "CJM"
+
+ALPHA_INIT= 0.7 #aggression in round 0
+DEFEND_FRAC=0.3 #how hard to defend a held good
+REOPT_INTERVAL=25 #rounds between 1 swap local searches
+EPS= 0.1  #min bid tick
 
 class MyAgent(MyLSVMAgent):
+
+
+
     def setup(self):
-        self.goods = list(self.get_goods()) #get all good s 
-        self.prox_goods = set(self.get_goods_in_proximity())
-        self.eps = 0.1 # auction increment
-        self.slack = 2.0 # max jump above min-bid
-
-        #optimal chunk size parameters, should we change?
-        self.target_size_nat = 6 
-        self.target_size_reg = 5 
-
-        # dynamic tracking
-        self.price_hist = deque(maxlen=6)
+        self.round=0
+        self.goods=list(self.get_goods()) 
+        self.target=set()
 
 
-    def _delta_values(self, tentative):
-        base_val = self.calc_total_valuation(tentative)
-        deltas = {}
-        for g in self.goods:
-            if g in tentative:
-                continue
-            deltas[g] = self.calc_total_valuation(tentative | {g}) - base_val
-        return deltas 
 
 
-    def _price_trend(self, g, horizon=4):
-        if len(self.price_hist) < 2:
-            return 0.0
-
-        recent = list(self.price_hist)[-horizon:]
-        series = [p[g] for p in recent if g in p] # handles first round
-        if len(series) < 2: # not enough data yet
-            return 0.0
-        diffs  = [series[i] - series[i-1] for i in range(1, len(series))]
-        return sum(diffs) / len(diffs)
-
-    def _jump_bid(self, g, delta, min_bid):
-        jump = min(delta / 2.0, self.slack) #soft aggression
-        return min_bid + max(self.eps, jump)   
 
 
-    #national
+
+
+    # HELPER FUNCTIONS 
+    def _bundle_util(self, bundle):
+        return self.calc_total_utility(bundle)
+
+    def _marginal_gain(self, bundle, g, min_bids):
+        with_g = bundle | {g}
+        return self._bundle_util(with_g) - self._bundle_util(bundle) - min_bids[g]
+
     
-    def national_bidder_strategy(self):
-        tentative = set(self.get_tentative_allocation())
-        target = self.target_size_nat - len(tentative)
-        deltas = self._delta_values(tentative)
-
-        # pick top-delta goods anywhere on the board
-        cand = [g for g in self.goods if g in deltas and deltas[g] > 0]
-        cand.sort(key=lambda g: deltas[g], reverse=True)
-        bids = {}
-
-        for g in cand[:max(0, target)]:
-            trend = self._price_trend(g)
-            if trend > deltas[g] / 4: #national bundles tolerate more risk
-                continue
-            min_bid = self.get_min_bids({g})[g]
-            bids[g] = self._jump_bid(g, deltas[g], min_bid)
-
-        return bids
 
 
 
 
 
-    #get all valid neighbors in proximity. like if you're at an edge it should return fewer neighbors
-    def get_neighbors(self, good):
-        i, j = self.get_goods_to_index()[good]
-        neighbors = []
-        for di, dj in [(-1,0), (1,0), (0,-1), (0,1)]:
-            ni, nj = i+di, j+dj
-            if 0 <= ni < 3 and 0 <= nj < 6: #if valid row, col
-                for g, (gi, gj) in self.get_goods_to_index().items():
-
-
-                    if (gi, gj) == (ni, nj):
-
-                        neighbors.append(g)
-        return neighbors
-
-
-    #regional
-
-    def regional_bidder_strategy(self):
-        tentative = set(self.get_tentative_allocation())
-        target = self.target_size_reg - len(tentative)
-        deltas = self._delta_values(tentative)
-
-        # consider only proximity goods until target met
-        cand = [g for g in self.prox_goods if g in deltas and deltas[g] > 0]
-        cand.sort(key=lambda g: deltas[g], reverse=True)
-        bids = {}
-
-        for g in cand[:max(0, target)]:
-            trend = self._price_trend(g)
-            # if price is climbing faster than remaining delta, skip
-            if trend > deltas[g] / 3:
-                continue
-            min_bid = self.get_min_bids({g})[g]
-            bids[g] = self._jump_bid(g, deltas[g], min_bid)
-
-        return bids
 
 
 
     def get_bids(self):
-        bids = (self.national_bidder_strategy() if self.is_national_bidder()
-                else self.regional_bidder_strategy())
+        min_bids=self.get_min_bids()
+        alloc=set(self.get_tentative_allocation())
+        bids={}
 
+        #STAKE INITIAL CLAIM
+        if self.round == 0:
+            self.target = self._initial_target(min_bids)
+            for g in self.target:
+                bids[g] = min_bids[g]+ALPHA_INIT*(self.get_valuation(g) - min_bids[g])
+            return self.clip_bids(bids)
 
-        if not bids:
-            g = min(self.goods, key=lambda x: self.get_min_bids({x})[x])
-            bids = {g: self.get_min_bids({g})[g]}
+        #DEFEND
+        for g in alloc:
+            delta = self._marginal_gain(alloc, g, min_bids) + min_bids[g]
+            if delta > EPS:
+                bids[g] = min_bids[g] + DEFEND_FRAC * delta
 
-        #final safety net
+        #SNIPE
+        for g in self.goods:
+            if g in alloc: continue
+            mg = self._marginal_gain(alloc, g, min_bids)
+            if mg > 0:
+                bids[g] = min_bids[g] + 0.5 * mg
+
         bids = self.clip_bids(bids)
-        assert self.is_valid_bid_bundle(bids)
+        if not self.is_valid_bid_bundle(bids):
+            bids.clear() #FALL BACK
+
+
+
+
+
+
+        #REOPTIMIZE EVERY ONCE IN A WHILE
+        if self.round % REOPT_INTERVAL == 0:
+            self._retarget(min_bids, alloc)
+
         return bids
-    
+
+
+
+
+
+
     def update(self):
-        try:
-            prices = self.current_prices_map()
-        except AttributeError:
-            prices = self.ndarray_to_map(self.get_current_prices())
+        self.round += 1
 
-        self.price_hist.append(prices)
 
-    def teardown(self):
-        #TODO: Fill out with anything you want to run at the end of each auction
-        pass 
+
+
+
+
+
+
+
+    #SEARCHES
+    def _initial_target(self, min_bids):
+        limit= 12 if self.is_national_bidder() else 6
+        roi_heap = [(-(self.get_valuation(g) - min_bids[g]), g) for g in self.goods]
+        heapq.heapify(roi_heap)
+
+        bundle = set()
+        while roi_heap and len(bundle) < limit:
+            _, g = heapq.heappop(roi_heap)
+            bundle.add(g)
+        return bundle
+
+    def _retarget(self, min_bids, alloc):
+        best_gain, add, drop = 0, None, None
+        for g_add in self.goods:
+            if g_add in alloc: continue
+            gain_add = self._marginal_gain(alloc, g_add, min_bids)
+            if gain_add <= 0: continue
+
+            #build the hypothetical bundle after the swap
+            for g_drop in alloc:
+                new_bundle = alloc - {g_drop} | {g_add}
+                util_gain  = self._bundle_util(new_bundle) - self._bundle_util(alloc)
+
+                #track the best swap found so far
+                if util_gain > best_gain:
+                    best_gain, add, drop = util_gain, g_add, g_drop
+        if best_gain > 0:
+            #remove worse good and insert better one in target set
+            self.target.discard(drop)
+            self.target.add(add)
 
 ################### SUBMISSION #####################
 my_agent_submission = MyAgent(NAME)
 ####################################################
 
-
-def process_saved_game(filepath): 
-    """ 
-    Here is some example code to load in a saved game in the format of a json.gz and to work with it
-    """
-    print(f"Processing: {filepath}")
-    
-    # NOTE: Data is a dictionary mapping 
-    with gzip.open(filepath, 'rt', encoding='UTF-8') as f:
-        game_data = json.load(f)
-        for agent, agent_data in game_data.items(): 
-            if agent_data['valuations'] is not None: 
-                # agent is the name of the agent whose data is being processed 
-                agent = agent 
-                
-                # bid_history is the bidding history of the agent as a list of maps from good to bid
-                bid_history = agent_data['bid_history']
-                
-                # price_history is the price history of the agent as a list of maps from good to price
-                price_history = agent_data['price_history']
-                
-                # util_history is the history of the agent's previous utilities 
-                util_history = agent_data['util_history']
-                
-                # util_history is the history of the previous tentative winners of all goods as a list of maps from good to winner
-                winner_history = agent_data['winner_history']
-                
-                # elo is the agent's elo as a string
-                elo = agent_data['elo']
-                
-                # is_national_bidder is a boolean indicating whether or not the agent is a national bidder in this game 
-                is_national_bidder = agent_data['is_national_bidder']
-                
-                # valuations is the valuations the agent recieved for each good as a map from good to valuation
-                valuations = agent_data['valuations']
-                
-                # regional_good is the regional good assigned to the agent 
-                # This is None in the case that the bidder is a national bidder 
-                regional_good = agent_data['regional_good']
-            
-            # TODO: If you are planning on learning from previously saved games enter your code below. 
-            
-            
-        
-def process_saved_dir(dirpath): 
-    """ 
-     Here is some example code to load in all saved game in the format of a json.gz in a directory and to work with it
-    """
-    for filename in os.listdir(dirpath):
-        if filename.endswith('.json.gz'):
-            filepath = os.path.join(dirpath, filename)
-            process_saved_game(filepath)
-            
-
 if __name__ == "__main__":
-    
-    # Heres an example of how to process a singular file 
-    # process_saved_game(path_from_local_root("saved_games/2024-04-08_17-36-34.json.gz"))
-    # or every file in a directory 
-    # process_saved_dir(path_from_local_root("saved_games"))
-    
+
     ### DO NOT TOUCH THIS #####
     agent = MyAgent(NAME)
     arena = LSVMArena(
         num_cycles_per_player = 3,
-        timeout=1,
+        timeout       = 1,
         local_save_path="saved_games",
         players=[
             agent,
             MyAgent("CP - MyAgent"),
             MyAgent("CP2 - MyAgent"),
             MyAgent("CP3 - MyAgent"),
-            MinBidAgent("Min Bidder"), 
-            JumpBidder("Jump Bidder"), 
-            TruthfulBidder("Truthful Bidder"), 
+            MinBidAgent("Min Bidder"),
+            JumpBidder("Jump Bidder"),
+            TruthfulBidder("Truthful Bidder"),
         ]
     )
-    
+
     start = time.time()
     arena.run()
     end = time.time()
-    print(f"{end - start} Seconds Elapsed")
