@@ -7,7 +7,7 @@ from agt_server.agents.test_agents.lsvm.truthful_bidder.my_agent import Truthful
 
 import numpy as np, heapq, time
 
-NAME = "CJM"
+NAME = "CJM2"
 
 ALPHA_INIT= 0.7 #aggression in round 0
 DEFEND_FRAC=0.3 #how hard to defend a held good
